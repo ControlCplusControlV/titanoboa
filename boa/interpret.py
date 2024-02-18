@@ -4,12 +4,13 @@ import sys
 import textwrap
 from pathlib import Path
 from typing import Any, Union
-
+import solcx
 import vyper
 from vyper.cli.vyper_compile import get_interface_codes
 from vyper.compiler.phases import CompilerData
 
 from boa.contracts.abi.abi_contract import ABIContractFactory
+from boa.contracts.solidity import SolDeployer
 from boa.contracts.vyper.compiler_utils import anchor_compiler_settings
 from boa.contracts.vyper.vyper_contract import (
     VyperBlueprint,
@@ -151,7 +152,15 @@ def loads_partial(
     return VyperDeployer(data, filename=filename)
 
 
-def load_partial(filename: str, compiler_args=None) -> VyperDeployer:  # type: ignore
+def load_partial(filename: str, compiler_args=None, contract_name=None) -> VyperDeployer | SolDeployer:  # type: ignore
+    if ".sol" in filename:
+        if contract_name is None:
+            contract_name = Path(filename).stem
+        compiled_src = solcx.compile_files([filename], output_values=["abi", "bin"])
+        abi = compiled_src[f"{filename}:{contract_name}"]["abi"]
+        bytecode = compiled_src[f"{filename}:{contract_name}"]["bin"]
+        bytecode = bytes.fromhex(bytecode)
+        return SolDeployer(abi, bytecode, filename=filename)
     with open(filename) as f:
         return loads_partial(
             f.read(), name=filename, filename=filename, compiler_args=compiler_args
